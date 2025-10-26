@@ -84,6 +84,23 @@ Data summary:
 def index():
     return render_template("index.html")  # Your chat HTML
 
+@app.route("/analyze", methods=["POST"])
+def sales_route():  # unique function name
+    try:
+        if "file" in request.files:
+            data = pd.read_csv(request.files["file"])
+        else:
+            json_data = request.get_json()
+            if not json_data:
+                return jsonify({"error": "No file or JSON data provided."})
+            data = pd.DataFrame(json_data)
+
+        result = analyze_sales_df(data)
+        return jsonify(result)
+
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
@@ -99,16 +116,7 @@ def chat():
     except Exception as e:
         return jsonify({"error": str(e)})
 
-@app.route("/analyze", methods=["POST"])
-def analyze():
-    if "file" in request.files:
-        data = pd.read_csv(request.files["file"])
-    else:
-        json_data = request.get_json()
-        data = pd.DataFrame(json_data)
 
-    result = analyze_sales_df(data)
-    return jsonify(result)
 
 if __name__ == "__main__":
     app.run(debug=True)
