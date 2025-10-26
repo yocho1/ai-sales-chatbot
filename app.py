@@ -67,14 +67,37 @@ Data summary:
     except Exception as e:
         ai_insight = f"❌ AI Insight generation failed: {e}"
 
+    # Convert numpy / pandas scalar types to native Python types so jsonify can serialize them
+    def to_native(val):
+        try:
+            if isinstance(val, (np.integer,)):
+                return int(val)
+            if isinstance(val, (np.floating,)):
+                return float(val)
+            if hasattr(val, 'item'):
+                return val.item()
+        except Exception:
+            pass
+        return val
+
+    total_sales_native = to_native(total_sales)
+    avg_sales_native = to_native(round(avg_sales, 2))
+    median_sales_native = to_native(round(median_sales, 2))
+    std_sales_native = to_native(round(std_sales, 2))
+
+    highest_sale_product = str(highest_sale['product'])
+    lowest_sale_product = str(lowest_sale['product'])
+    highest_sale_sales = to_native(highest_sale['sales'])
+    lowest_sale_sales = to_native(lowest_sale['sales'])
+
     return {
-        "total_sales": total_sales,
-        "average_sales": round(avg_sales, 2),
-        "median_sales": round(median_sales, 2),
-        "std_sales": round(std_sales, 2),
-        "highest_sale": {"product": highest_sale['product'], "sales": highest_sale['sales']},
-        "lowest_sale": {"product": lowest_sale['product'], "sales": lowest_sale['sales']},
-        "trend": trend,
+        "total_sales": total_sales_native,
+        "average_sales": avg_sales_native,
+        "median_sales": median_sales_native,
+        "std_sales": std_sales_native,
+        "highest_sale": {"product": highest_sale_product, "sales": highest_sale_sales},
+        "lowest_sale": {"product": lowest_sale_product, "sales": lowest_sale_sales},
+        "trend": str(trend),
         "ai_insight": ai_insight
     }
 
@@ -84,37 +107,56 @@ Data summary:
 def index():
     return render_template("index.html")  # Your chat HTML
 
-@app.route("/analyze", methods=["POST"])
-def sales_route():  # unique function name
-    try:
-        if "file" in request.files:
-            data = pd.read_csv(request.files["file"])
-        else:
-            json_data = request.get_json()
-            if not json_data:
-                return jsonify({"error": "No file or JSON data provided."})
-            data = pd.DataFrame(json_data)
-
-        result = analyze_sales_df(data)
-        return jsonify(result)
-
-    except Exception as e:
-        return jsonify({"error": str(e)})
-
 @app.route("/chat", methods=["POST"])
 def chat():
     try:
-        user_message = request.json.get("message", "")
-        if not user_message:
-            return jsonify({"error": "No message provided."})
+        data = request.get_json()
+        if not data or 'message' not in data:
+            return jsonify({"error": "No message provided"}), 400
 
-        response = client.models.generate_content(
-            model="models/gemini-pro-latest",
-            contents=user_message
-        )
-        return jsonify({"reply": response.text})
+        user_message = str(data['message'])
+
+        # Build a prompt for the AI model. You can expand this to include
+        # conversation history or system instructions.
+        prompt = f"User: {user_message}\nAssistant:"
+
+        try:
+            response = client.models.generate_content(
+                model="models/gemini-pro-latest",
+                contents=prompt
+            )
+            ai_reply = getattr(response, 'text', None) or str(response)
+        except Exception as e:
+            # If the AI call fails, fall back to a friendly message
+            ai_reply = f"(AI generation failed) {e}"
+
+        return jsonify({"response": ai_reply})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/analyze", methods=["GET", "POST"])
+def analyze():
+    if request.method == "GET":
+        return render_template("analyze.html")  # Create this template or use index.html
+        
+    try:
+        if "file" not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+            
+        file = request.files["file"]
+        if file.filename == '':
+            return jsonify({"error": "No file selected"}), 400
+            
+        if not file.filename.endswith('.csv'):
+            return jsonify({"error": "Only CSV files are allowed"}), 400
+            
+        data = pd.read_csv(file)
+
+        result = analyze_sales_df(data)
+        return jsonify(result)
     except Exception as e:
         return jsonify({"error": str(e)})
+
 
 
 

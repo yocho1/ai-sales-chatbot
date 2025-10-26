@@ -2,111 +2,194 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI Sales Analyzer</title>
+    <title>AI Chat & Sales Analyzer</title>
     <style>
       body {
         font-family: Arial, sans-serif;
-        background: #f8f9fa;
-        color: #333;
+        margin: 20px;
+        max-width: 800px;
+        margin: 0 auto;
         padding: 20px;
       }
-      .container {
-        max-width: 600px;
-        margin: auto;
-        background: white;
-        padding: 25px;
-        border-radius: 10px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+      .section {
+        background: #f5f5f5;
+        padding: 20px;
+        border-radius: 8px;
+        margin-bottom: 20px;
       }
-      h1 {
-        text-align: center;
-        color: #007bff;
-      }
-      input,
-      button,
-      textarea {
-        width: 100%;
-        margin-top: 10px;
-        padding: 10px;
-        border-radius: 5px;
+      #chat-box {
         border: 1px solid #ccc;
+        padding: 10px;
+        height: 200px;
+        overflow-y: auto;
+        margin-bottom: 10px;
+        background: white;
+        border-radius: 4px;
+      }
+      .user {
+        color: blue;
+        margin: 5px 0;
+      }
+      .ai {
+        color: green;
+        margin: 5px 0;
+      }
+      #analysis-result {
+        border: 1px solid #ccc;
+        padding: 10px;
+        height: 200px;
+        overflow-y: auto;
+        white-space: pre-wrap;
+        background: white;
+        border-radius: 4px;
+      }
+      .input-group {
+        margin: 10px 0;
+        display: flex;
+        gap: 10px;
+      }
+      input[type='text'],
+      input[type='file'] {
+        padding: 8px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        flex-grow: 1;
       }
       button {
-        background-color: #007bff;
+        background: #007bff;
         color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 4px;
         cursor: pointer;
-        font-weight: bold;
       }
       button:hover {
-        background-color: #0056b3;
+        background: #0056b3;
       }
-      pre {
-        background: #f1f1f1;
-        padding: 10px;
-        border-radius: 5px;
-        margin-top: 15px;
-        max-height: 300px;
-        overflow-y: auto;
+      .upload-section {
+        border: 2px dashed #ccc;
+        padding: 20px;
+        text-align: center;
+        background: white;
+        border-radius: 4px;
+        margin: 10px 0;
+      }
+      .instructions {
+        color: #666;
+        margin: 10px 0;
       }
     </style>
   </head>
   <body>
-    <div class="container">
-      <h1>📊 AI Sales Analyzer</h1>
+    <div class="section">
+      <h2>AI Chat</h2>
+      <div id="chat-box"></div>
+      <div class="input-group">
+        <input type="text" id="user-message" placeholder="Type a message..." />
+        <button onclick="sendMessage()">Send</button>
+      </div>
+    </div>
 
-      <h3>Upload CSV File</h3>
-      <input type="file" id="csvFile" accept=".csv" />
-      <button onclick="uploadCSV()">Analyze CSV</button>
+    <div class="section">
+      <h2>Sales Analysis</h2>
+      <div class="instructions">
+        <p>To analyze your sales data:</p>
+        <ol>
+          <li>
+            Prepare a CSV file with columns named <strong>product</strong> and
+            <strong>sales</strong>
+          </li>
+          <li>Click "Choose File" below to select your CSV file</li>
+          <li>Click "Analyze CSV" to see the results</li>
+        </ol>
+      </div>
 
-      <h3>Or Paste JSON Data</h3>
-      <textarea
-        id="jsonData"
-        rows="6"
-        placeholder='[{"product":"Pouf A","sales":120},{"product":"Pouf B","sales":300}]'
-      ></textarea>
-      <button onclick="analyzeJSON()">Analyze JSON</button>
+      <div class="upload-section">
+        <input type="file" id="csv-file" accept=".csv" />
+        <button onclick="analyzeSales()">Analyze CSV</button>
+      </div>
 
-      <h3>Result</h3>
-      <pre id="result"></pre>
+      <div class="instructions">
+        <p>Your analysis results will appear below:</p>
+      </div>
+      <pre id="analysis-result"></pre>
     </div>
 
     <script>
-      async function uploadCSV() {
-        const file = document.getElementById('csvFile').files[0]
-        if (!file) return alert('Please select a CSV file.')
+      const chatBox = document.getElementById('chat-box')
+
+      function appendMessage(sender, text) {
+        const msg = document.createElement('div')
+        msg.className = sender
+        msg.textContent = `${sender.toUpperCase()}: ${text}`
+        chatBox.appendChild(msg)
+        chatBox.scrollTop = chatBox.scrollHeight
+      }
+
+      async function sendMessage() {
+        const input = document.getElementById('user-message')
+        const message = input.value.trim()
+        if (!message) return
+        appendMessage('user', message)
+        input.value = ''
+
+        try {
+          const res = await fetch('/chat', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message }),
+          })
+          const data = await res.json()
+          appendMessage('ai', data.response || data.error)
+        } catch (err) {
+          console.error('Chat error:', err)
+          appendMessage(
+            'ai',
+            'Error: ' +
+              (err.message || 'Could not connect to server. Please try again.')
+          )
+        }
+      }
+
+      async function analyzeSales() {
+        const fileInput = document.getElementById('csv-file')
+        const resultDiv = document.getElementById('analysis-result')
+
+        if (!fileInput.files.length) {
+          alert('Please select a CSV file first.')
+          return
+        }
+
+        const file = fileInput.files[0]
+        if (!file.name.endsWith('.csv')) {
+          alert('Please select a CSV file (must end with .csv)')
+          return
+        }
 
         const formData = new FormData()
         formData.append('file', file)
 
-        const response = await fetch('/analyze', {
-          method: 'POST',
-          body: formData,
-        })
-        const data = await response.json()
-        document.getElementById('result').textContent = JSON.stringify(
-          data,
-          null,
-          2
-        )
-      }
+        resultDiv.textContent = 'Analyzing file...'
 
-      async function analyzeJSON() {
-        const jsonData = document.getElementById('jsonData').value
         try {
-          const response = await fetch('/analyze', {
+          const res = await fetch('/analyze', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: jsonData,
+            body: formData,
           })
-          const data = await response.json()
-          document.getElementById('result').textContent = JSON.stringify(
-            data,
-            null,
-            2
-          )
-        } catch (e) {
-          document.getElementById('result').textContent = 'Error: ' + e.message
+
+          if (!res.ok) {
+            const errorData = await res.json()
+            throw new Error(errorData.error || 'Server error')
+          }
+
+          const data = await res.json()
+          resultDiv.textContent = JSON.stringify(data, null, 2)
+        } catch (err) {
+          console.error('Analysis error:', err)
+          resultDiv.textContent =
+            'Error: ' +
+            (err.message ||
+              'Could not analyze file. Please check the file format and try again.')
         }
       }
     </script>
